@@ -1,0 +1,30 @@
+﻿  Server.cpp
+  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
+  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
+  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
+  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
+F:\mystuff\mygames\Project1\Server\Server.cpp(63,77): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(63,64): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(114,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(114,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(115,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(115,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(116,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(116,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(117,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(117,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(118,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(118,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(119,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(119,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(120,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(120,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(121,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(121,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(122,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(122,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(123,79): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+F:\mystuff\mygames\Project1\Server\Server.cpp(123,59): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+  Server.vcxproj -> F:\mystuff\mygames\Project1\x64\Debug\Server.exe
+  'pwsh.exe' is not recognized as an internal or external command,
+  operable program or batch file.

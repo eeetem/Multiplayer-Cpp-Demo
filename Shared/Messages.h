@@ -1,9 +1,10 @@
 #pragma once
 #include "World.h"
 #include <chrono>
-#include <cstring> // For strncpy
+#include <cstring>
 
-namespace Shared {
+
+namespace Network {
 
     enum class MessageSendType {
         Fast,
@@ -24,7 +25,6 @@ namespace Shared {
         MessageSendType sendType = MessageSendType::Fast;
         uint16_t msgID = 0; // Message ID for tracking
 
-        // Constructor with only MessageType
         Message(MessageType messageType)
             : type(messageType) {
         }
@@ -42,8 +42,8 @@ namespace Shared {
 
 
 	struct WorldSpawn : public Message {
-		Vector2 pos;
-		Color color;
+		World::Vector2 pos;
+        World::Color color;
 
         bool player;
         char playerId[32];
@@ -51,12 +51,11 @@ namespace Shared {
 		WorldSpawn() : Message(MessageType::WorldSpawn), pos{ 0, 0 }, color{ 0, 0, 0 }, player(false) {
 		}
 
-		// Constructor for WorldSpawn
-		WorldSpawn(const Vector2& position, const Color& color)
+		WorldSpawn(const World::Vector2& position, const World::Color& color)
 			: Message(MessageType::WorldSpawn), pos(position), color(color), player(false) {
 		}
 
-        WorldSpawn(const Player& p)
+        WorldSpawn(const World::Player& p)
             : Message(MessageType::WorldSpawn), pos(p.pos), color(p.color), player(true) {
             strncpy_s(playerId, p.name.c_str(), sizeof(playerId) - 1);
             playerId[sizeof(playerId) - 1] = '\0';
@@ -65,21 +64,23 @@ namespace Shared {
 
     struct PlayerUpdate : public Message {
         char playerId[32];
-        Vector2 pos;
-        Vector2 vel;
+        World::Vector2 pos;
+        World::Vector2 vel;
 
         // Constructor for PlayerUpdate
-        PlayerUpdate(const char* id, const Vector2& position, const Vector2& velocity)
+        PlayerUpdate(const char* id, const World::Vector2& position, const World::Vector2& velocity)
             : Message(MessageType::PlayerUpdate), pos(position), vel(velocity) {
             strncpy_s(playerId, id, sizeof(playerId) - 1);
             playerId[sizeof(playerId) - 1] = '\0'; 
         }
 
         // Constructor from Player object
-        PlayerUpdate(const Player& p)
+        PlayerUpdate(const World::Player& p)
             : Message(MessageType::PlayerUpdate), pos(p.pos), vel(p.vel) {
             strncpy_s(playerId, p.name.c_str(), sizeof(playerId) - 1);
             playerId[sizeof(playerId) - 1] = '\0';
         }
+		PlayerUpdate() :Message(MessageType::PlayerUpdate), pos{ 0,0 }, vel{ 0,0 } {
+		}
     };
 }

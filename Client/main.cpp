@@ -1,11 +1,10 @@
 #include <SDL.h>
 #include <stdio.h>
-#include "../Shared/World.h"
-#include "../Shared/Structs.h" 
-#include "../Shared/Messages.h" 
-
+#include <Shared/World.h>
+#include <Shared/Structs.h>
+#include <Shared/Messages.h> 
+#include <Shared/Network.h> 
 #include <boost/asio.hpp>
-
 
 using boost::asio::ip::udp;
 
@@ -17,7 +16,7 @@ const int SCREEN_HEIGHT = 720;
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 
-Shared::World world;
+World::World world;
 
 void close()
 {
@@ -26,59 +25,6 @@ void close()
 	SDL_Quit();
 }
 
-uint32_t tick_recived = 0;
-void handleMessage(const char* data, size_t length) {
-	if (length < sizeof(Shared::MessageType)) {
-		printf("Invalid message received\n");
-		return;
-	}
-
-	// Read the message type
-	Shared::MessageType type = *reinterpret_cast<const Shared::MessageType*>(data);
-	uint32_t tick = *reinterpret_cast<const uint32_t*>(data + sizeof(Shared::MessageType));
-	printf("Message type %d from tick %d\n", static_cast<int>(type), tick);
-	// Read tick sent
-	if (tick >= tick_recived) {
-		tick_recived = tick;
-	}
-	else {
-		printf("Out of order message, dropping....\n");
-		return;
-	}
-
-
-	switch (type) {
-		case Shared::MessageType::WorldSpawn: {
-			const Shared::WorldSpawn* spawn = reinterpret_cast<const Shared::WorldSpawn*>(data);
-			if (spawn->player) {
-				world.AddPlayer(Shared::Player(spawn->playerId, spawn->pos.x, spawn->pos.y, spawn->color.r, spawn->color.g, spawn->color.b));
-				printf("Player spawned with ID: %s\n", spawn->playerId);
-			}
-			else {
-				world.AddWorldObject(Shared::WorldObject(spawn->pos.x, spawn->pos.y, spawn->color.r, spawn->color.g, spawn->color.b));
-				printf("World object spawned at (%f, %f)\n", spawn->pos.x, spawn->pos.y);
-			}
-
-		
-		}
-
-
-		default:
-			printf("Unknown message type received\n");
-			break;
-	}
-}
-
-void updateNetwork(udp::socket& socket) {
-	char data[1024];
-	udp::endpoint sender_endpoint;
-
-	// Non-blocking receive
-	while (socket.available() > 0) {
-		size_t length = socket.receive_from(boost::asio::buffer(data), sender_endpoint);
-		handleMessage(data, length);
-	}
-}
 
 
 bool init()
@@ -138,31 +84,20 @@ int main(int argc, char* args[])
 		printf("Failed to initialize!\n");
 		return 1;
 	}
-	printf("Initialised!\n");
+	printf("Initialised Window!\n");
+
+	std::string connectID = std::to_string(rand() % 100);
+	Network::InitClient(connectID.c_str());
 
 	bool quit = false;
-
-
-
 	SDL_Event e;
-	Shared::Vector2 camera = { 0, 0 };
+	World::Vector2 camera = { 0, 0 };
 
 
 
 
 	Uint32 lastTime = SDL_GetTicks();
 	float deltaTime = 0.0f;
-
-	boost::asio::io_context io_context;
-	udp::socket socket(io_context, udp::endpoint(udp::v4(), 0));
-	udp::endpoint server_endpoint(boost::asio::ip::make_address("127.0.0.1"), 6666);
-
-
-	//a random int is used but if i bothered to implement a gui this could be a username
-	std::string connectID = std::to_string(rand() % 100);
-	printf("connecting with %s\n", connectID.c_str());
-	Shared::PlayerRegister playerRegister(connectID.c_str());
-	socket.send_to(boost::asio::buffer(&playerRegister, sizeof(playerRegister)), server_endpoint);
 
 
 	while (!quit)
@@ -186,29 +121,32 @@ int main(int argc, char* args[])
 
 	
 		if (world.PlayerExists(connectID)) {
-			Shared::Player p = world.GetPlayerByName(connectID);
-			float moveSpeed = 10.0f; // Movement speed in units per second
+			World::Player& p = world.GetPlayerByName(connectID);
+			float moveSpeed = World::PLAYER_SPEED;
 			if (currentKeyStates[SDL_SCANCODE_UP])
 			{
-				p.pos.y -= moveSpeed * deltaTime; // Move up
+				p.vel.y -= moveSpeed;
 			}
 			if (currentKeyStates[SDL_SCANCODE_DOWN])
 			{
-				p.pos.y += moveSpeed * deltaTime; // Move down
+				p.vel.y += moveSpeed;
 			}
 			if (currentKeyStates[SDL_SCANCODE_LEFT])
 			{
-				p.pos.x -= moveSpeed * deltaTime; // Move left
+				p.vel.x -= moveSpeed;
 			}
 			if (currentKeyStates[SDL_SCANCODE_RIGHT])
 			{
-				p.pos.x += moveSpeed * deltaTime; // Move right
+				p.vel.x += moveSpeed;
 			}
+			//movement packet
+			Network::SendPlayerUpdate(p);
+			
 		}
 		//LOGIC
-		updateNetwork(socket);
-		world.Update(deltaTime);
 
+		world.Update(deltaTime);
+		Network::Update(world);
 
 		//RENDER
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
@@ -216,34 +154,30 @@ int main(int argc, char* args[])
 
 		//set camera position to our player
 		if (world.PlayerExists(connectID)) {
-			Shared::Player p = world.GetPlayerByName(connectID);
-			camera.x = p.pos.x - SCREEN_WIDTH / 2 + Shared::PLAYER_SIZE / 2;
-			camera.y = p.pos.y - SCREEN_HEIGHT / 2 + Shared::PLAYER_SIZE / 2;
+			World::Player p = world.GetPlayerByName(connectID);
+			camera.x = p.pos.x - SCREEN_WIDTH / 2 + World::PLAYER_SIZE / 2;
+			camera.y = p.pos.y - SCREEN_HEIGHT / 2 + World::PLAYER_SIZE / 2;
 		}
 		
 
 
-	
-		for (const auto& wo : world.GetWorld())
+		for (const auto& [name, player] : world.GetPlayers())
 		{
-	
-			SDL_SetRenderDrawColor(renderer, wo.color.r, wo.color.g, wo.color.b, 255);
+			SDL_SetRenderDrawColor(renderer, player.color.r, player.color.g, player.color.b, 255);
 
-			int centerX = static_cast<int>(wo.pos.x) - camera.x + Shared::PLAYER_SIZE / 2;
-			int centerY = static_cast<int>(wo.pos.y) - camera.y + Shared::PLAYER_SIZE / 2;
-			int radius = Shared::PLAYER_SIZE / 2;
+			int centerX = static_cast<int>(player.pos.x) - camera.x + World::PLAYER_SIZE / 2;
+			int centerY = static_cast<int>(player.pos.y) - camera.y + World::PLAYER_SIZE / 2;
+			int radius = World::PLAYER_SIZE / 2;
 
 			DrawCircle(renderer, centerX, centerY, radius);
 		}
-		for (const auto& kv : world.GetPlayers())
+		for (const auto& wo : world.GetWorld())
 		{
-
-			auto wo = kv.second;
 			SDL_SetRenderDrawColor(renderer, wo.color.r, wo.color.g, wo.color.b, 255);
 
-			int centerX = static_cast<int>(wo.pos.x) - camera.x + Shared::PLAYER_SIZE / 2;
-			int centerY = static_cast<int>(wo.pos.y) - camera.y + Shared::PLAYER_SIZE / 2;
-			int radius = Shared::PLAYER_SIZE / 2;
+			int centerX = static_cast<int>(wo.pos.x) - camera.x + World::PLAYER_SIZE / 2;
+			int centerY = static_cast<int>(wo.pos.y) - camera.y + World::PLAYER_SIZE / 2;
+			int radius = World::PLAYER_SIZE / 2;
 
 			DrawCircle(renderer, centerX, centerY, radius);
 		}

@@ -5,8 +5,10 @@
 #include <string>
 
 
-namespace Shared {
+namespace World {
     constexpr int PLAYER_SIZE = 50;
+    constexpr float PLAYER_SPEED = 0.35f;
+
     class WorldObject {
     public:
         Vector2 pos;
@@ -20,6 +22,7 @@ namespace Shared {
     public:
         Vector2 vel;
 		std::string name;
+		bool dirty = false;
 
         Player(std::string name, float x, float y, unsigned char r, unsigned char g, unsigned char b);
         Player();

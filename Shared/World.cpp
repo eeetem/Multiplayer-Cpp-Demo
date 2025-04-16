@@ -1,8 +1,7 @@
-#include "pch.h"
 #include "World.h"
 #include <stdexcept>
 
-namespace Shared {
+namespace World {
 
 	WorldObject::WorldObject(float x, float y, unsigned char r, unsigned char g, unsigned char b)
 		: pos{ x, y }, color{ r, g, b } {
@@ -23,10 +22,12 @@ namespace Shared {
     World::~World() {}
 
     void World::Update(float deltaTime) {
+        const float DAMPING_RATE = 0.1f;
         for (auto& [name, player] : players) {
-            player.pos.x += player.vel.x * deltaTime;
-            player.pos.y += player.vel.y * deltaTime;
+            player.pos += player.vel * deltaTime;
+            player.vel *= (1.0f - DAMPING_RATE * deltaTime);
         }
+       
     }
 
     void World::AddPlayer(const Player& player) {

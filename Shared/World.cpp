@@ -22,13 +22,22 @@ namespace World {
     World::~World() {}
 
     void World::Update(float deltaTime) {
-        const float DAMPING_RATE = 0.1f;
         for (auto& [name, player] : players) {
-            player.pos += player.vel * deltaTime;
-            player.vel *= (1.0f - DAMPING_RATE * deltaTime);
+			player.Update(deltaTime);
         }
        
     }
+	void Player::Update(float deltaTime) {
+        if (vel.x != 0 || vel.y != 0) {
+            dirty = true;
+        }
+ 
+		pos += vel * deltaTime;
+       // vel.x = 0;
+       // vel.y = 0;
+       
+        //TODO damp velocity for players the current client isnt controling to avoid jittering
+	}
 
     void World::AddPlayer(const Player& player) {
         players[player.name] = player;

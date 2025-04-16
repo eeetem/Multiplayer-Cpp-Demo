@@ -17,8 +17,7 @@ World::World world;
 int main()
 {
 
-    std::cout << "Logging test: Server started\n";
-
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
 
     //initialise some randomised world objects so players can be seen moving instead of being stuck in a black void
@@ -29,7 +28,6 @@ int main()
     world.AddWorldObject(World::WorldObject(rand() % 500 - 250, rand() % 500 - 250, 200, 200, 200));
 
     Network::InitServer(6666);
-
 
 
 

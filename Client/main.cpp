@@ -85,6 +85,8 @@ int main(int argc, char* args[])
 		return 1;
 	}
 	printf("Initialised Window!\n");
+	
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
 	std::string connectID = std::to_string(rand() % 100);
 	Network::InitClient(connectID.c_str());
@@ -123,6 +125,7 @@ int main(int argc, char* args[])
 		if (world.PlayerExists(connectID)) {
 			World::Player& p = world.GetPlayerByName(connectID);
 			float moveSpeed = World::PLAYER_SPEED;
+			p.vel = { 0, 0 };
 			if (currentKeyStates[SDL_SCANCODE_UP])
 			{
 				p.vel.y -= moveSpeed;

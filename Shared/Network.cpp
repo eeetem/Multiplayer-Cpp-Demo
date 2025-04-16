@@ -17,6 +17,9 @@ namespace Network {
 	boost::asio::io_context io_context;
 	udp::socket socket(io_context);
 	uint32_t tick = 0;
+	uint16_t nextMessageId = 0;
+	std::map<uint16_t, PendingAckMessage> ackMessages;
+
 
 #if CLIENT
 	udp::endpoint server_endpoint;
@@ -27,6 +30,29 @@ namespace Network {
 #else
 	std::map<udp::endpoint, Client> clients; 
 #endif
+
+
+	void DeliverMessage(boost::asio::mutable_buffer data, const udp::endpoint& endpoint) {
+		int r = rand() % 100;
+		if (r < PACKET_LOSS_SIM) {
+			printf("Simulated packet loss, dropping message\n");
+			return;
+		}
+
+	
+
+		// Simulate latency without blocking this thread
+		int latency = LATENCY_MIN_SIM + (rand() % (LATENCY_MAX_SIM - LATENCY_MIN_SIM + 1));
+
+		std::vector<char> data_copy(static_cast<const char*>(data.data()),
+			static_cast<const char*>(data.data()) + data.size());
+
+		std::thread([data_copy, endpoint, latency]() {
+			std::this_thread::sleep_for(std::chrono::milliseconds(latency));
+			socket.send_to(boost::asio::buffer(data_copy), endpoint);
+			}).detach();
+
+	}
 
 
 #ifdef SERVER
@@ -100,7 +126,7 @@ namespace Network {
 				printf("Player %s updated to (%f, %f)\n", update->playerId, p.pos.x, p.pos.y);
 			}
 			c.lastPositionUpdateServerTick = tick;
-			p.dirty = true;
+			p.Update(NETWORK_TICK_INTERVAL);//we're a tick at the very least behind so update here on top of normal
 
 			break;
 		}
@@ -125,25 +151,46 @@ namespace Network {
 			clients[sender_endpoint] = Client{ string_name, tick };
 			//echo back to confirm connection
 			PlayerRegister msg(playerRegister->playerId);
-			SendMessage(msg, tick, sender_endpoint);
+			ProcessAndSendMessage(msg, tick, sender_endpoint);
 			
 			
 			
 			
 			//now spawn all players to the newly connected client
-
 			// First send all world objects
 			for (const auto& worldObject : world.GetWorld()) {
 				WorldSpawn msg(worldObject.pos, worldObject.color);
-				SendMessage(msg, tick, sender_endpoint);
+				ProcessAndSendMessage(msg, tick, sender_endpoint);
 			}
 
-			// Then send all players (with their specific player information)
+			// Then send all players
 			for (const auto& [playerName, player] : world.GetPlayers()) {
 				WorldSpawn msg(player);
-				SendMessage(msg, tick, sender_endpoint);
+				ProcessAndSendMessage(msg, tick, sender_endpoint);
 			}
+
+			//spawn this player for all other players
+			for (const auto& [endpoint, client] : clients) {
+				if (endpoint != sender_endpoint) { // Avoid sending the spawn message back to the newly connected player
+					WorldSpawn msg(world.GetPlayerByName(playerRegister->playerId));
+					ProcessAndSendMessage(msg, tick, endpoint);
+				}
+			}
+
 			break;
+		}
+		case MessageType::Ack: {
+			const Ack* ackmsg = reinterpret_cast<const Ack*>(data);
+			printf("Recieved ack for message ID %d\n", ackmsg->confirmId);
+			//remove from pending ack list
+			auto it = ackMessages.find(ackmsg->confirmId);
+			if (it != ackMessages.end()) {
+				ackMessages.erase(it);
+				printf("Removed ack message ID %d\n", ackmsg->confirmId);
+			}
+			else {
+				printf("Ack message ID %d not found\n", ackmsg->confirmId);
+			}
 		}
 
 
@@ -182,7 +229,7 @@ namespace Network {
 		if (distance < World::PLAYER_SPEED*NETWORK_TICK_INTERVAL) {
 			return;
 		}
-		SendMessage(update, tick, server_endpoint);
+		ProcessAndSendMessage(update, tick, server_endpoint);
 		lastUpdate = update;
 		lastPlayerUpdate = currentTime;
 	}
@@ -210,15 +257,41 @@ namespace Network {
 		case MessageType::PlayerUpdate: {
 			const PlayerUpdate* update = reinterpret_cast<const PlayerUpdate*>(data);
 			if (world.PlayerExists(update->playerId)) {
-
 				World::Player& p = world.GetPlayerByName(update->playerId);
-				p.pos.x = update->pos.x;
-				p.pos.y = update->pos.y;
-				p.vel.x = update->vel.x;
-				p.vel.y = update->vel.y;
-				printf("Player %s updated to (%f, %f)\n", update->playerId, p.pos.x, p.pos.y);
+				//if the player is within 8 ticks of server position do not teleport him because the position is in the past due to latency.
+				float distance = sqrt(pow(update->pos.x - p.pos.x, 2) + pow(update->pos.y - p.pos.y, 2));
+				float maxDistanceInTwoTicks = World::PLAYER_SPEED * 8 * NETWORK_TICK_INTERVAL;
+
+				if (distance <= maxDistanceInTwoTicks) {
+					printf("Player %s position is within 2 ticks (%.2f units), not teleporting\n",
+						update->playerId, distance);
+					// Only update velocity to maintain movement direction, but don't teleport
+					p.vel.x = update->vel.x;
+					p.vel.y = update->vel.y;
+				}
+				else {
+					// Player is too far away, need to teleport
+					p.pos.x = update->pos.x;
+					p.pos.y = update->pos.y;
+					p.vel.x = update->vel.x;
+					p.vel.y = update->vel.y;
+					printf("Player %s teleported to (%.2f, %.2f)\n", update->playerId, p.pos.x, p.pos.y);
+				}
 			}
 			break;
+		}
+		case MessageType::Ack: {
+			const Ack* ackmsg = reinterpret_cast<const Ack*>(data);
+			printf("Recieved ack for message ID %d\n", ackmsg->confirmId);
+			//remove from pending ack list
+			auto it = ackMessages.find(ackmsg->confirmId);
+			if (it != ackMessages.end()) {
+				ackMessages.erase(it);
+				printf("Removed ack message ID %d\n", ackmsg->confirmId);
+			}
+			else {
+				printf("Ack message ID %d not found\n", ackmsg->confirmId);
+			}
 		}
 
 		default:
@@ -238,23 +311,50 @@ namespace Network {
 		// Read the message type
 		MessageType type = *reinterpret_cast<const MessageType*>(data);
 		uint32_t tick = *reinterpret_cast<const uint32_t*>(data + sizeof(MessageType));
+		MessageSendType sendType = *reinterpret_cast<const MessageSendType*>(data + sizeof(MessageType) + sizeof(uint32_t));
+
+
 		printf("Message type %d from tick %d\n", static_cast<int>(type), tick);
 	
-		uint32_t& lastRecived = tick;// In case server fails to match client(ie this is a new client) just set the tick to the current one
-#ifdef CLIENT
-		lastRecived = lastRecivedTick;
-#elif defined(SERVER)
-		if (clients.find(sender_endpoint) != clients.end()) {
-			lastRecived = clients[sender_endpoint].lastClientTick;
+
+		switch (sendType) {
+
+			case MessageSendType::Guaranteed: {
+				uint16_t msgID = *reinterpret_cast<const uint16_t*>(data + sizeof(MessageType) + sizeof(uint32_t) + sizeof(MessageSendType));
+				//send and ACK back
+				printf("Recieved guaranteed message with ID %d, sending ack..\n", msgID);
+				Ack ack(msgID);
+				DeliverMessage(boost::asio::buffer(&ack, sizeof(ack)), sender_endpoint);
+				break;
+			}
+
+			case MessageSendType::Unreliable: {
+				// No specific action for unreliable messages
+				break;
+			}
+
+			case MessageSendType::Ordered: {
+				uint32_t* lastRecived = &tick; // In case server fails to match client (i.e., this is a new client), just set the tick to the current one
+	#ifdef CLIENT
+				lastRecived = &lastRecivedTick;
+	#elif defined(SERVER)
+				if (clients.find(sender_endpoint) != clients.end()) {
+					lastRecived = &clients[sender_endpoint].lastClientTick;
+				}
+	#endif
+				if (tick >= *lastRecived) {
+					*lastRecived = tick;
+				}
+				else {
+					printf("Out of order message, dropping....\n");
+					return;
+				}
+				break;
+			}
+
+
 		}
-#endif
-		if (tick >= lastRecived) {
-			lastRecived = tick;
-		}
-		else {
-			printf("Out of order message, dropping....\n");
-			return;
-		}
+
 
 		if (length < sizeof(type)) {
 			printf("Invalid message size received\n");
@@ -283,6 +383,19 @@ namespace Network {
 		tick++;
 
 
+
+		for (auto pendingMsg : ackMessages) {
+			if (pendingMsg.second.lastAttemptTick + 25 < tick) {
+				//retry
+				pendingMsg.second.lastAttemptTick = tick;
+				printf("Resending guaranteed message ID %d\n", pendingMsg.first);
+				DeliverMessage(boost::asio::buffer(pendingMsg.second.data.data(), pendingMsg.second.data.size()),
+					pendingMsg.second.endpoint);
+			}
+		}
+		
+
+
 #ifdef SERVER
 		//player updtes
 		std::vector<Network::PlayerUpdate> playerUpdates;
@@ -300,7 +413,7 @@ namespace Network {
 			size_t messageSize = sizeof(update);
 
 			for (const auto& client : clients) {
-				SendMessage(update, tick, client.first);
+				ProcessAndSendMessage(update, tick, client.first);
 			}
 		}
 #endif

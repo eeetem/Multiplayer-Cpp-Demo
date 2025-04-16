@@ -26,6 +26,7 @@ namespace World {
 
         Player(std::string name, float x, float y, unsigned char r, unsigned char g, unsigned char b);
         Player();
+        void Update(float deltaTime);
     };
 
 

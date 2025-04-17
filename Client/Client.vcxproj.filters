@@ -32,12 +32,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="main.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Shared\Header.h">
-      <Filter>Header Files\Shared</Filter>
-    </ClInclude>
     <ClInclude Include="..\Shared\Messages.h">
       <Filter>Header Files\Shared</Filter>
     </ClInclude>
